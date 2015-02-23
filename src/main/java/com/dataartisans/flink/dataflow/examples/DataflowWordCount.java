@@ -25,10 +25,10 @@ import com.google.cloud.dataflow.sdk.options.Description;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
 
-public class WordCount {
+public class DataflowWordCount {
 
 	/**
-	 * Options supported by {@link WordCount}.
+	 * Options supported by {@link DataflowWordCount}.
 	 * <p>
 	 * Inherits standard configuration options.
 	 */

@@ -132,7 +132,6 @@ public class KvCoderComperator <K, V> extends TypeComparator<KV<K, V>> {
 		}
 		return 0;	}
 
-
 	@Override
 	public int compare(KV<K, V> first, KV<K, V> second) {
 		try {

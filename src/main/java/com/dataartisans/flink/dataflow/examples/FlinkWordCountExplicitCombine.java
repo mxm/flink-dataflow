@@ -2,6 +2,7 @@ package com.dataartisans.flink.dataflow.examples;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.GroupReduceFunction;
+import org.apache.flink.api.common.functions.RichGroupReduceFunction;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -9,7 +10,7 @@ import org.apache.flink.util.Collector;
 
 
 @SuppressWarnings("serial")
-public class FlinkWordCount {
+public class FlinkWordCountExplicitCombine {
 
 	// *************************************************************************
 	//     PROGRAM
@@ -32,21 +33,7 @@ public class FlinkWordCount {
 				text.flatMap(new Tokenizer())
 						// group by the tuple field "0" and sum up tuple field "1"
 						.groupBy(0)
-						.reduceGroup(new GroupReduceFunction<Tuple2<String, Integer>, Tuple2<String, Integer>>() {
-
-							@Override
-							public void reduce(Iterable<Tuple2<String, Integer>> values, Collector<Tuple2<String, Integer>> out) throws Exception {
-								int count = 0;
-								String key = null;
-
-								for (Tuple2<String, Integer> in: values) {
-									key = in.f0;
-									count += in.f1;
-								}
-
-								out.collect(new Tuple2<String, Integer>(key, count));
-							}
-						});
+						.reduceGroup(new CountFunction());
 
 		// emit result
 		if(fileOutput) {
@@ -121,4 +108,26 @@ public class FlinkWordCount {
 			return env.fromElements("Helo", "Helo", "world");
 		}
 	}
+
+    @RichGroupReduceFunction.Combinable
+    private static class CountFunction extends RichGroupReduceFunction<Tuple2<String, Integer>, Tuple2<String, Integer>> {
+
+        @Override
+        public void reduce(Iterable<Tuple2<String, Integer>> values, Collector<Tuple2<String, Integer>> out) throws Exception {
+            int count = 0;
+            String key = null;
+
+            for (Tuple2<String, Integer> in: values) {
+                key = in.f0;
+                count += in.f1;
+            }
+
+            out.collect(new Tuple2<String, Integer>(key, count));
+        }
+
+        @Override
+        public void combine(Iterable<Tuple2<String, Integer>> values, Collector<Tuple2<String, Integer>> out) throws Exception {
+            reduce(values, out);
+        }
+    }
 }

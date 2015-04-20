@@ -320,7 +320,7 @@ public class FlinkTransformTranslators {
 //
 //		@Override
 //		public void translateNode(Combine.GroupedValues<K, VI, VO> transform, TranslationContext context) {
-//			DataSet<KV<K, VI>> inputDataSet = context.getInputDataSet(transform.getInput());
+//			DataSet<KV<K, VI>> inputDataSet = context.getInputDataStream(transform.getInput());
 //
 //			Combine.KeyedCombineFn<? super K, ? super VI, ?, VO> keyedCombineFn = transform.getFn();
 //
@@ -332,7 +332,7 @@ public class FlinkTransformTranslators {
 //
 //			GroupReduceOperator<KV<K, VI>, KV<K, VO>> outputDataSet =
 //					new GroupReduceOperator<>(grouping, typeInformation, groupReduceFunction, transform.getName());
-//			context.setOutputDataSet(transform.getOutput(), outputDataSet);
+//			context.setOutputDataStream(transform.getOutput(), outputDataSet);
 //		}
 //	}
 	

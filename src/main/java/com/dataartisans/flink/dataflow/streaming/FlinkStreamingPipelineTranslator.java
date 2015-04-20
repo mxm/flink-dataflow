@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dataartisans.flink.dataflow.translation;
+package com.dataartisans.flink.dataflow.streaming;
 
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.Pipeline.PipelineVisitor;
@@ -23,25 +23,24 @@ import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.runners.TransformTreeNode;
 import com.google.cloud.dataflow.sdk.transforms.PTransform;
 import com.google.cloud.dataflow.sdk.transforms.join.CoGroupByKey;
-import com.google.cloud.dataflow.sdk.transforms.join.KeyedPCollectionTuple;
 import com.google.cloud.dataflow.sdk.values.PValue;
-import org.apache.flink.api.java.ExecutionEnvironment;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 /**
  * FlinkPipelineTranslator knows how to translate Pipeline objects into Flink Jobs.
  *
  * This is based on {@link com.google.cloud.dataflow.sdk.runners.DataflowPipelineTranslator}
  */
-public class FlinkPipelineTranslator implements PipelineVisitor {
+public class FlinkStreamingPipelineTranslator implements PipelineVisitor {
 
-	private final TranslationContext context;
+	private final StreamingTranslationContext context;
 
 	private int depth = 0;
 
 	private boolean inComposite = false;
 
-	public FlinkPipelineTranslator(ExecutionEnvironment env, PipelineOptions options) {
-		this.context = new TranslationContext(env, options);
+	public FlinkStreamingPipelineTranslator(StreamExecutionEnvironment env, PipelineOptions options) {
+		this.context = new StreamingTranslationContext(env, options);
 	}
 
 
@@ -72,7 +71,7 @@ public class FlinkPipelineTranslator implements PipelineVisitor {
 		PTransform<?, ?> transform = node.getTransform();
 
 		if (transform != null) {
-			TransformTranslator<?> translator = FlinkTransformTranslators.getTranslator(transform);
+			TransformTranslator<?> translator = FlinkStreamingTransformTranslators.getTranslator(transform);
 
 			if (translator != null) {
 				inComposite = true;
@@ -93,7 +92,7 @@ public class FlinkPipelineTranslator implements PipelineVisitor {
 		PTransform<?, ?> transform = node.getTransform();
 
 		if (transform != null) {
-			TransformTranslator<?> translator = FlinkTransformTranslators.getTranslator(transform);
+			TransformTranslator<?> translator = FlinkStreamingTransformTranslators.getTranslator(transform);
 
 			if (translator != null) {
 				System.out.println(genSpaces(this.depth) + "doingCompositeTransform- " + formatNodeName(node));
@@ -118,7 +117,7 @@ public class FlinkPipelineTranslator implements PipelineVisitor {
 		PTransform<?, ?> transform = node.getTransform();
 
 		// the translator to the Flink operation(s)
-		TransformTranslator<?> translator = FlinkTransformTranslators.getTranslator(transform);
+		TransformTranslator<?> translator = FlinkStreamingTransformTranslators.getTranslator(transform);
 
 		if (translator == null) {
 			System.out.println(node.getTransform().getClass());
@@ -152,7 +151,6 @@ public class FlinkPipelineTranslator implements PipelineVisitor {
 	 */
 	public static interface TransformTranslator<Type extends PTransform> {
 
-		void translateNode(Type transform, TranslationContext context);
+		void translateNode(Type transform, StreamingTranslationContext context);
 	}
-
 }

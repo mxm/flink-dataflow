@@ -71,4 +71,5 @@ public interface FlinkPipelineOptions extends PipelineOptions, ApplicationNameOp
 	@Default.Integer(-1)
 	Integer getParallelism();
 	void setParallelism(Integer value);
+
 }

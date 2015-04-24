@@ -18,17 +18,27 @@
 package com.dataartisans.flink.dataflow.streaming;
 
 import com.dataartisans.flink.dataflow.translation.TranslationContext;
+import com.dataartisans.flink.dataflow.translation.functions.FlinkDoFnFunction;
+import com.dataartisans.flink.dataflow.translation.functions.FlinkFlatMapDoFnFunction;
 import com.google.cloud.dataflow.sdk.coders.Coder;
 import com.google.cloud.dataflow.sdk.io.ReadSource;
 import com.google.cloud.dataflow.sdk.io.Source;
 import com.google.cloud.dataflow.sdk.io.TextIO;
+import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.PTransform;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.values.PCollectionView;
+import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.DataSet;
+import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.api.java.operators.MapPartitionOperator;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.functions.source.FileSourceFunction;
+import org.apache.flink.streaming.api.operators.StreamFlatMap;
+import org.apache.flink.streaming.api.operators.StreamSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +75,7 @@ public class FlinkStreamingTransformTranslators {
 		//TRANSLATORS.put(PubsubIO.Read.Bound.class, null);
 		//TRANSLATORS.put(PubsubIO.Write.Bound.class, null);
 
-		TRANSLATORS.put(ReadSource.Bound.class, new ReadSourceTranslator());
+//		TRANSLATORS.put(ReadSource.Bound.class, new ReadSourceTranslator());
 
 		TRANSLATORS.put(TextIO.Read.Bound.class, new TextIOReadTranslator());
 		TRANSLATORS.put(TextIO.Write.Bound.class, new TextIOWriteTranslator());
@@ -76,22 +86,22 @@ public class FlinkStreamingTransformTranslators {
 		return TRANSLATORS.get(transform.getClass());
 	}
 
-	private static class ReadSourceTranslator<T> implements FlinkStreamingPipelineTranslator.TransformTranslator<ReadSource.Bound<T>> {
-
-		@Override
-		public void translateNode(ReadSource.Bound<T> transform, StreamingTranslationContext context) {
-			String name = transform.getName();
-			Source<T> source = transform.getSource();
-			Coder<T> coder = transform.getOutput().getCoder();
-
-			TypeInformation<T> typeInformation = context.getTypeInfo(transform.getOutput());
-
-			// TODO: Add DataStreamSource accordingly
-//			DataStreamSource<T> dataSource = new DataStreamSource<>(context.getExecutionEnvironment(), new SourceInputFormat<>(source, context.getPipelineOptions(), coder), typeInformation, name);
+//	private static class ReadSourceTranslator<T> implements FlinkStreamingPipelineTranslator.TransformTranslator<ReadSource.Bound<T>> {
 //
-//			context.setOutput(transform.getOutput(), dataSource);
-		}
-	}
+//		@Override
+//		public void translateNode(ReadSource.Bound<T> transform, StreamingTranslationContext context) {
+//			String name = transform.getName();
+//			Source<T> source = transform.getSource();
+//			Coder<T> coder = transform.getOutput().getCoder();
+//
+//			TypeInformation<T> typeInformation = context.getTypeInfo(transform.getOutput());
+//
+//			// TODO: Add DataStreamSource accordingly
+////			DataStreamSource<T> dataSource = new DataStreamSource<>(context.getExecutionEnvironment(), new SourceInputFormat<>(source, context.getPipelineOptions(), coder), typeInformation, name);
+////
+////			context.setOutput(transform.getOutput(), dataSource);
+//		}
+//	}
 
 
 	private static class TextIOReadTranslator implements FlinkStreamingPipelineTranslator.TransformTranslator<TextIO.Read.Bound<String>> {
@@ -109,12 +119,17 @@ public class FlinkStreamingTransformTranslators {
 			LOG.warn("Translation of TextIO.CompressionType not yet supported. Is: {}.", compressionType);
 			LOG.warn("Translation of TextIO.Read.needsValidation not yet supported. Is: {}.", needsValidation);
 
+			InputFormat<String, ?> inputFormat = new TextInputFormat(new Path(path));
 			TypeInformation<String> typeInformation = context.getTypeInfo(transform.getOutput());
 
 			// TODO: Add DataStreamSource accordingly
 //			DataSource<String> source = new DataSource<>(context.getExecutionEnvironment(), new TextInputFormat(new Path(path)), typeInformation, name);
-//
-//			context.setOutputDataStream(transform.getOutput(), source);
+
+			DataStreamSource<String> source = new DataStreamSource<>(context.getExecutionEnvironment(), "source",
+					typeInformation, new StreamSource<>(new FileSourceFunction(inputFormat, typeInformation)), true, name);
+			context.getExecutionEnvironment().getStreamGraph().setInputFormat(source.getId(), inputFormat);
+
+			context.setOutputDataStream(transform.getOutput(), source);
 		}
 	}
 
@@ -149,22 +164,25 @@ public class FlinkStreamingTransformTranslators {
 
 		@Override
 		public void translateNode(ParDo.Bound<IN, OUT> transform, StreamingTranslationContext context) {
-//			DataSet<IN> inputDataSet = context.getInputDataSet(transform.getInput());
-//
-//			final DoFn<IN, OUT> doFn = transform.getFn();
-//
+			DataStream<IN> inputDataStream = context.getInputDataStream(transform.getInput());
+
+			final DoFn<IN, OUT> doFn = transform.getFn();
+
 //			if (doFn instanceof DoFn.RequiresKeyedState) {
 //				LOG.error("Flink Batch Execution does not support Keyed State.");
 //			}
-//
-//			TypeInformation<OUT> typeInformation = context.getTypeInfo(transform.getOutput());
-//
-//			FlinkDoFnFunction<IN, OUT> doFnWrapper = new FlinkDoFnFunction<>(doFn, context.getPipelineOptions());
-//			MapPartitionOperator<IN, OUT> outputDataSet = new MapPartitionOperator<>(inputDataSet, typeInformation, doFnWrapper, transform.getName());
-//
+
+			TypeInformation<OUT> typeInformation = context.getTypeInfo(transform.getOutput());
+
+			FlinkFlatMapDoFnFunction<IN, OUT> doFnWrapper = new FlinkFlatMapDoFnFunction<>(doFn, context.getPipelineOptions());
+//			MapPartitionOperator<IN, OUT> outputDataSet = new MapPartitionOperator<>(inputDataStream, typeInformation, doFnWrapper, transform.getName());
+
+			DataStream<OUT> outputDataStream = inputDataStream.transform(transform.getName(), typeInformation, new StreamFlatMap<>(doFnWrapper));
+			context.getExecutionEnvironment().getStreamGraph().setChaining(false);
+
 //			transformSideInputs(transform.getSideInputs(), outputDataSet, context);
-//
-//			context.setOutputDataSet(transform.getOutput(), outputDataSet);
+
+			context.setOutputDataStream(transform.getOutput(), outputDataStream);
 		}
 	}
 

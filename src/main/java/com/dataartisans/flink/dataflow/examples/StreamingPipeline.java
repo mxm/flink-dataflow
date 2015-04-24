@@ -16,20 +16,27 @@
 package com.dataartisans.flink.dataflow.examples;
 
 import com.dataartisans.flink.dataflow.FlinkPipelineOptions;
-import com.dataartisans.flink.dataflow.FlinkPipelineRunner;
-import com.google.cloud.dataflow.examples.WordCount.CountWords;
+import com.dataartisans.flink.dataflow.streaming.FlinkStreamingPipelineRunner;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.io.TextIO;
-import com.google.cloud.dataflow.sdk.options.DataflowPipelineOptions;
 import com.google.cloud.dataflow.sdk.options.Default;
 import com.google.cloud.dataflow.sdk.options.Description;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
+import com.google.cloud.dataflow.sdk.transforms.DoFn;
+import com.google.cloud.dataflow.sdk.transforms.ParDo;
 
-public class StreamingWordCount {
+public class StreamingPipeline {
+
+	public static class UpperCase extends DoFn<String, String> {
+		@Override
+		public void processElement(ProcessContext c) throws Exception {
+			c.output(c.element().toUpperCase());
+		}
+	}
 
 	/**
-	 * Options supported by {@link com.dataartisans.flink.dataflow.examples.StreamingWordCount}.
+	 * Options supported by {@link StreamingPipeline}.
 	 * <p>
 	 * Inherits standard configuration options.
 	 */
@@ -55,14 +62,14 @@ public class StreamingWordCount {
 	public static void main(String[] args) {
 		
 		Options options = PipelineOptionsFactory.fromArgs(args).as(Options.class);
-		options.setRunner(FlinkPipelineRunner.class);
+		options.setRunner(FlinkStreamingPipelineRunner.class);
 
 		options.setStreaming(true);
 
 		Pipeline p = Pipeline.create(options);
 
 		p.apply(TextIO.Read.named("ReadLines").from(options.getInput()))
-				.apply(new CountWords())
+				.apply(ParDo.of(new UpperCase()))
 				.apply(TextIO.Write.named("WriteCounts")
 						.to(options.getOutput())
 						.withNumShards(options.getNumShards()));

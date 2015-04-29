@@ -23,15 +23,40 @@ import com.google.cloud.dataflow.sdk.options.Default;
 import com.google.cloud.dataflow.sdk.options.Description;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
+import com.google.cloud.dataflow.sdk.transforms.Count;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
+import com.google.cloud.dataflow.sdk.transforms.windowing.FixedWindows;
+import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
+import com.google.cloud.dataflow.sdk.values.KV;
+import org.joda.time.Duration;
 
 public class StreamingPipeline {
 
-	public static class UpperCase extends DoFn<String, String> {
+	public static class Tokenizer extends DoFn<String, String> {
 		@Override
 		public void processElement(ProcessContext c) throws Exception {
-			c.output(c.element().toUpperCase());
+			// Split the line into words.
+			String[] words = c.element().toLowerCase().split("[^a-zA-Z']+");
+
+			// Output each word encountered into the output PCollection.
+			for (String word : words) {
+				if (!word.isEmpty()) {
+					c.output(word);
+				}
+			}
+		}
+	}
+
+	/** A DoFn that converts a Word and Count into a printable string. */
+	static class FormatCountsFn extends DoFn<KV<String, Long>, String> {
+		private static final long serialVersionUID = 0;
+
+		@Override
+		public void processElement(ProcessContext c) {
+			String output = "Element: " + c.element().getKey()
+					+ " Value: " + c.element().getValue();
+			c.output(output);
 		}
 	}
 
@@ -69,7 +94,10 @@ public class StreamingPipeline {
 		Pipeline p = Pipeline.create(options);
 
 		p.apply(TextIO.Read.named("ReadLines").from(options.getInput()))
-				.apply(ParDo.of(new UpperCase()))
+				.apply(ParDo.of(new Tokenizer()))
+				.apply(Window.<String>into(FixedWindows.of(Duration.millis(1))))
+				.apply(Count.<String>perElement())
+				.apply(ParDo.of(new FormatCountsFn()))
 				.apply(TextIO.Write.named("WriteCounts")
 						.to(options.getOutput())
 						.withNumShards(options.getNumShards()));

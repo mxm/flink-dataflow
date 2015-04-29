@@ -119,6 +119,9 @@ public class FlinkStreamingPipelineRunner extends PipelineRunner<FlinkRunnerResu
 		this.options = options;
 
 		this.flinkEnv = createExecutionEnvironment(options);
+		//for testing purposes
+//		flinkEnv.getStreamGraph().setChaining(false); // does not help
+		flinkEnv.setParallelism(1);
 
 		this.translator = new FlinkStreamingPipelineTranslator(flinkEnv, options);
 	}

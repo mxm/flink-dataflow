@@ -15,6 +15,8 @@
  */
 package com.dataartisans.flink.dataflow;
 
+import com.dataartisans.flink.dataflow.runner.FlinkBatchPipelineRunner;
+import com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.PipelineResult;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
@@ -22,7 +24,7 @@ import com.google.cloud.dataflow.sdk.runners.PipelineRunner;
 
 /**
  * {@link com.google.cloud.dataflow.sdk.Pipeline} for testing Dataflow programs on the
- * {@link com.dataartisans.flink.dataflow.FlinkPipelineRunner}.
+ * {@link com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner}.
  */
 public class FlinkTestPipeline extends Pipeline {
 
@@ -33,7 +35,7 @@ public class FlinkTestPipeline extends Pipeline {
 	 * {@link Pipeline#run} to execute the pipeline and check the tests.
 	 */
 	public static FlinkTestPipeline create() {
-		FlinkPipelineRunner flinkRunner = FlinkPipelineRunner.createForTest();
+		FlinkPipelineRunner flinkRunner = FlinkBatchPipelineRunner.createForTest();
 		return new FlinkTestPipeline(flinkRunner, flinkRunner.getPipelineOptions());
 	}
 

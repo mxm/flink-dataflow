@@ -13,25 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dataartisans.flink.dataflow.streaming;
+package com.dataartisans.flink.dataflow.runner;
 
-import com.dataartisans.flink.dataflow.FlinkPipelineOptions;
-import com.dataartisans.flink.dataflow.FlinkRunnerResult;
-import com.dataartisans.flink.dataflow.translation.FlinkPipelineTranslator;
+import com.dataartisans.flink.dataflow.streaming.translation.FlinkStreamingPipelineTranslator;
 import com.google.cloud.dataflow.sdk.Pipeline;
-import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
-import com.google.cloud.dataflow.sdk.options.PipelineOptionsValidator;
-import com.google.cloud.dataflow.sdk.runners.DataflowPipelineRunner;
-import com.google.cloud.dataflow.sdk.runners.PipelineRunner;
 import com.google.cloud.dataflow.sdk.transforms.PTransform;
 import com.google.cloud.dataflow.sdk.values.PInput;
 import com.google.cloud.dataflow.sdk.values.POutput;
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import org.apache.flink.api.common.JobExecutionResult;
-import org.apache.flink.api.java.CollectionEnvironment;
-import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,12 +41,9 @@ import java.util.Map;
  *
  * This is based on {@link com.google.cloud.dataflow.sdk.runners.DataflowPipelineRunner}.
  */
-public class FlinkStreamingPipelineRunner extends PipelineRunner<FlinkRunnerResult> {
+public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 
 	private static final Logger LOG = LoggerFactory.getLogger(FlinkStreamingPipelineRunner.class);
-
-	/** Provided options. */
-	private final FlinkPipelineOptions options;
 
 	/**
 	 * The Flink execution environment. This is instantiated to either a
@@ -70,53 +57,9 @@ public class FlinkStreamingPipelineRunner extends PipelineRunner<FlinkRunnerResu
 	/** Translator for this FlinkPipelineRunner, based on options. */
 	private final FlinkStreamingPipelineTranslator translator;
 
-	/**
-	 * Construct a runner from the provided options.
-	 *
-	 * @param options Properties which configure the runner.
-	 * @return The newly created runner.
-	 */
-	public static FlinkStreamingPipelineRunner fromOptions(PipelineOptions options) {
-		FlinkPipelineOptions flinkOptions =
-				PipelineOptionsValidator.validate(FlinkPipelineOptions.class, options);
-		ArrayList<String> missing = new ArrayList<>();
 
-		if (flinkOptions.getAppName() == null) {
-			missing.add("appName");
-		}
-		if (missing.size() > 0) {
-			throw new IllegalArgumentException(
-					"Missing required values: " + Joiner.on(',').join(missing));
-		}
-
-		if (flinkOptions.getFilesToStage() == null) {
-			flinkOptions.setFilesToStage(detectClassPathResourcesToStage(
-					DataflowPipelineRunner.class.getClassLoader()));
-			LOG.info("PipelineOptions.filesToStage was not specified. "
-							+ "Defaulting to files from the classpath: will stage {} files. "
-							+ "Enable logging at DEBUG level to see which files will be staged.",
-					flinkOptions.getFilesToStage().size());
-			LOG.debug("Classpath elements: {}", flinkOptions.getFilesToStage());
-		}
-
-		// Verify jobName according to service requirements.
-		String jobName = flinkOptions.getJobName().toLowerCase();
-		Preconditions.checkArgument(jobName.matches("[a-z]([-a-z0-9]*[a-z0-9])?"), "JobName invalid; " +
-				"the name must consist of only the characters " + "[-a-z0-9], starting with a letter " +
-				"and ending with a letter " + "or number");
-		Preconditions.checkArgument(jobName.length() <= 40,
-				"JobName too long; must be no more than 40 characters in length");
-
-		// Set Flink Master to [auto] if no option was specified.
-		if (flinkOptions.getFlinkMaster() == null) {
-			flinkOptions.setFlinkMaster("[auto]");
-		}
-
-		return new FlinkStreamingPipelineRunner(flinkOptions);
-	}
-
-	private FlinkStreamingPipelineRunner(FlinkPipelineOptions options) {
-		this.options = options;
+	FlinkStreamingPipelineRunner(FlinkPipelineOptions options) {
+		super(options);
 
 		this.flinkEnv = createExecutionEnvironment(options);
 		//for testing purposes
@@ -197,13 +140,6 @@ public class FlinkStreamingPipelineRunner extends PipelineRunner<FlinkRunnerResu
 		}
 
 		return new FlinkRunnerResult(accumulators, result.getNetRuntime());
-	}
-
-	/**
-	 * For testing.
-	 */
-	public FlinkPipelineOptions getPipelineOptions() {
-		return options;
 	}
 
 	/**

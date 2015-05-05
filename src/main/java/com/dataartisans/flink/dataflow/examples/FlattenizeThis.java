@@ -15,7 +15,7 @@
  */
 package com.dataartisans.flink.dataflow.examples;
 
-import com.dataartisans.flink.dataflow.FlinkPipelineRunner;
+import com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner;
 import com.google.cloud.dataflow.examples.TfIdf;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.coders.StringDelegateCoder;
@@ -31,9 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 public class FlattenizeThis {

@@ -15,7 +15,7 @@
  */
 package com.dataartisans.flink.dataflow.examples;
 
-import com.dataartisans.flink.dataflow.FlinkPipelineRunner;
+import com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.coders.VoidCoder;
 import com.google.cloud.dataflow.sdk.io.TextIO;

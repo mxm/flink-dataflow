@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dataartisans.flink.dataflow.translation.functions;
+package com.dataartisans.flink.dataflow.streaming.functions;
 
 import com.google.cloud.dataflow.sdk.transforms.Combine;
 import com.google.cloud.dataflow.sdk.values.KV;
@@ -30,29 +30,32 @@ import java.util.Iterator;
  * {@link com.google.cloud.dataflow.sdk.values.KV} elements VI, extracts the key and emits accumulated
  * values which have the intermediate format VA.
  */
-public class FlinkPartialWindowReduceFunction<K, VI, VA> implements WindowMapFunction<KV<K, VI>, KV<K, VA>> {
+public class FlinkPartialWindowIteratorReduceFunction<K, VI, VA> implements WindowMapFunction<KV<K, ? extends Iterable<VI>>, KV<K, VA>> {
 
-	private final Combine.KeyedCombineFn<K, VI, VA, ?> keyedCombineFn;
+	private final Combine.KeyedCombineFn<? super K, ? super VI, VA, ?> keyedCombineFn;
 
-	public FlinkPartialWindowReduceFunction(Combine.KeyedCombineFn<K, VI, VA, ?>
-													keyedCombineFn) {
+	public FlinkPartialWindowIteratorReduceFunction(Combine.KeyedCombineFn<? super K, ? super VI, VA, ?>
+															keyedCombineFn) {
 		this.keyedCombineFn = keyedCombineFn;
 	}
 
 	@Override
-	public void mapWindow(Iterable<KV<K, VI>> elements, Collector<KV<K, VA>> out) throws Exception {
-		final Iterator<KV<K, VI>> iterator = elements.iterator();
+	public void mapWindow(Iterable<KV<K, ? extends Iterable<VI>>> elements, Collector<KV<K, VA>> out) throws Exception {
+		final Iterator<? extends KV<K, ? extends Iterable<VI>>> elementsItarator = elements.iterator();
 		// create accumulator using the first elements key
-		KV<K, VI> first = iterator.next();
+		KV<K, ? extends Iterable<VI>> first = elementsItarator.next();
 		K key = first.getKey();
-		VI value = first.getValue();
+		Iterator<VI> valueIterator = first.getValue().iterator();
 		VA accumulator = keyedCombineFn.createAccumulator(key);
 		// manually add for the first element
-		keyedCombineFn.addInput(key, accumulator, value);
+		keyedCombineFn.addInput(key, accumulator, valueIterator.next());
 
-		while(iterator.hasNext()) {
-			value = iterator.next().getValue();
-			keyedCombineFn.addInput(key, accumulator, value);
+		while(elementsItarator.hasNext()) {
+			valueIterator = elementsItarator.next().getValue().iterator();
+			while (valueIterator.hasNext()) {
+				VI value = valueIterator.next();
+				keyedCombineFn.addInput(key, accumulator, value);
+			}
 		}
 
 		out.collect(KV.of(key, accumulator));

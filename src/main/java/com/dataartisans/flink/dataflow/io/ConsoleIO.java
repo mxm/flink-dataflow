@@ -24,7 +24,7 @@ import com.google.cloud.dataflow.sdk.values.PDone;
  * to standard output.
  *
  * This is Flink-specific and will only work when executed using the
- * {@link com.dataartisans.flink.dataflow.FlinkPipelineRunner}.
+ * {@link com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner}.
  */
 public class ConsoleIO {
 

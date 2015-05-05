@@ -15,14 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dataartisans.flink.dataflow.streaming;
+package com.dataartisans.flink.dataflow.streaming.translation;
 
 import com.dataartisans.flink.dataflow.translation.TranslationContext;
 import com.dataartisans.flink.dataflow.translation.functions.FlinkFlatMapDoFnFunction;
-import com.dataartisans.flink.dataflow.translation.functions.FlinkKeyedListWindowAggregationFunction;
-import com.dataartisans.flink.dataflow.translation.functions.FlinkPartialWindowIteratorReduceFunction;
-import com.dataartisans.flink.dataflow.translation.functions.FlinkPartialWindowReduceFunction;
-import com.dataartisans.flink.dataflow.translation.functions.FlinkWindowReduceFunction;
+import com.dataartisans.flink.dataflow.streaming.functions.FlinkKeyedListWindowAggregationFunction;
+import com.dataartisans.flink.dataflow.streaming.functions.FlinkPartialWindowIteratorReduceFunction;
+import com.dataartisans.flink.dataflow.streaming.functions.FlinkPartialWindowReduceFunction;
+import com.dataartisans.flink.dataflow.streaming.functions.FlinkWindowReduceFunction;
 import com.google.cloud.dataflow.sdk.io.TextIO;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
@@ -52,13 +52,11 @@ import org.apache.flink.streaming.api.functions.source.FileSourceFunction;
 import org.apache.flink.streaming.api.operators.StreamFlatMap;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.windowing.helper.Time;
-import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

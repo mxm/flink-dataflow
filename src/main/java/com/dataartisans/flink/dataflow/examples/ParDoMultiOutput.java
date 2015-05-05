@@ -15,7 +15,7 @@
  */
 package com.dataartisans.flink.dataflow.examples;
 
-import com.dataartisans.flink.dataflow.FlinkPipelineRunner;
+import com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner;
 import com.dataartisans.flink.dataflow.io.ConsoleIO;
 import com.google.cloud.dataflow.examples.WordCount.Options;
 import com.google.cloud.dataflow.sdk.Pipeline;

@@ -15,8 +15,8 @@
  */
 package com.dataartisans.flink.dataflow.examples;
 
-import com.dataartisans.flink.dataflow.FlinkPipelineOptions;
-import com.dataartisans.flink.dataflow.streaming.FlinkStreamingPipelineRunner;
+import com.dataartisans.flink.dataflow.runner.FlinkPipelineOptions;
+import com.dataartisans.flink.dataflow.runner.FlinkPipelineRunner;
 import com.google.cloud.dataflow.sdk.Pipeline;
 import com.google.cloud.dataflow.sdk.io.TextIO;
 import com.google.cloud.dataflow.sdk.options.Default;
@@ -87,7 +87,7 @@ public class StreamingPipeline {
 	public static void main(String[] args) {
 		
 		Options options = PipelineOptionsFactory.fromArgs(args).as(Options.class);
-		options.setRunner(FlinkStreamingPipelineRunner.class);
+		options.setRunner(FlinkPipelineRunner.class);
 
 		options.setStreaming(true);
 

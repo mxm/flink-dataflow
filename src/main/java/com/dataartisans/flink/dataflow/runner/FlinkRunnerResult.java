@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.dataartisans.flink.dataflow;
+package com.dataartisans.flink.dataflow.runner;
 
 import com.google.cloud.dataflow.sdk.PipelineResult;
 import java.util.Collections;

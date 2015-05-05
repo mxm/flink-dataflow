@@ -33,9 +33,9 @@ import java.util.Iterator;
  */
 public class FlinkWindowReduceFunction<K, VA, VO> implements WindowMapFunction<KV<K, VA>, KV<K, VO>> {
 
-	private final Combine.KeyedCombineFn<K, ?, VA, VO> keyedCombineFn;
+	private final Combine.KeyedCombineFn<? super K, ?, VA, VO> keyedCombineFn;
 
-	public FlinkWindowReduceFunction(Combine.KeyedCombineFn<K, ?, VA, VO> keyedCombineFn) {
+	public FlinkWindowReduceFunction(Combine.KeyedCombineFn<? super K, ?, VA, VO> keyedCombineFn) {
 		this.keyedCombineFn = keyedCombineFn;
 	}
 

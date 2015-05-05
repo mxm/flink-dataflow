@@ -30,6 +30,7 @@ import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.typeutils.GenericTypeInfo;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.WindowedDataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
 import java.util.HashMap;
@@ -38,6 +39,7 @@ import java.util.Map;
 public class StreamingTranslationContext {
 
 	private final Map<PValue, DataStream<?>> dataStreams;
+	private final Map<PValue, WindowedDataStream<?>> windowedDataStreams;
 //	private final Map<PCollectionView<?>, DataSet<?>> broadcastDataSets;
 
 	private final StreamExecutionEnvironment env;
@@ -49,6 +51,7 @@ public class StreamingTranslationContext {
 		this.env = env;
 		this.options = options;
 		this.dataStreams = new HashMap<>();
+		this.windowedDataStreams = new HashMap<>();
 //		this.broadcastDataSets = new HashMap<>();
 	}
 	
@@ -66,10 +69,21 @@ public class StreamingTranslationContext {
 	public <T> DataStream<T> getInputDataStream(PValue value) {
 		return (DataStream<T>) dataStreams.get(value);
 	}
-	
+
+	@SuppressWarnings("unchecked")
+	public <T> WindowedDataStream<T> getInputWindowedDataStream(PValue value) {
+		return (WindowedDataStream<T>) windowedDataStreams.get(value);
+	}
+
 	public void setOutputDataStream(PValue value, DataStream<?> stream) {
 		if (!dataStreams.containsKey(value)) {
 			dataStreams.put(value, stream);
+		}
+	}
+
+	public void setOutputWindowedDataStream(PValue value, WindowedDataStream<?> stream) {
+		if (!windowedDataStreams.containsKey(value)) {
+			windowedDataStreams.put(value, stream);
 		}
 	}
 

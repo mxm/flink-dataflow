@@ -20,6 +20,7 @@ package com.dataartisans.flink.dataflow.streaming;
 import com.dataartisans.flink.dataflow.translation.TranslationContext;
 import com.dataartisans.flink.dataflow.translation.functions.FlinkFlatMapDoFnFunction;
 import com.dataartisans.flink.dataflow.translation.functions.FlinkKeyedListWindowAggregationFunction;
+import com.dataartisans.flink.dataflow.translation.functions.FlinkPartialWindowIteratorReduceFunction;
 import com.dataartisans.flink.dataflow.translation.functions.FlinkPartialWindowReduceFunction;
 import com.dataartisans.flink.dataflow.translation.functions.FlinkWindowReduceFunction;
 import com.google.cloud.dataflow.sdk.io.TextIO;
@@ -29,6 +30,8 @@ import com.google.cloud.dataflow.sdk.transforms.GroupByKey;
 import com.google.cloud.dataflow.sdk.transforms.PTransform;
 import com.google.cloud.dataflow.sdk.transforms.ParDo;
 import com.google.cloud.dataflow.sdk.transforms.windowing.BoundedWindow;
+import com.google.cloud.dataflow.sdk.transforms.windowing.FixedWindows;
+import com.google.cloud.dataflow.sdk.transforms.windowing.SlidingWindows;
 import com.google.cloud.dataflow.sdk.transforms.windowing.Window;
 import com.google.cloud.dataflow.sdk.transforms.windowing.WindowFn;
 import com.google.cloud.dataflow.sdk.util.WindowedValue;
@@ -44,15 +47,18 @@ import org.apache.flink.api.java.operators.MapPartitionOperator;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.datastream.WindowedDataStream;
 import org.apache.flink.streaming.api.functions.source.FileSourceFunction;
 import org.apache.flink.streaming.api.operators.StreamFlatMap;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.windowing.helper.Time;
+import org.joda.time.Duration;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +73,7 @@ import java.util.concurrent.TimeUnit;
 public class FlinkStreamingTransformTranslators {
 
 	private static boolean hasUnAppliedWindow = false;
+	private static boolean hasUnClosedWindow = false;
 	private static WindowFn<?, ?> windowFn;
 
 	// --------------------------------------------------------------------------------------------
@@ -90,6 +97,9 @@ public class FlinkStreamingTransformTranslators {
 		TRANSLATORS.put(GroupByKey.GroupAlsoByWindow.class, new GroupAlsoByWindowsTranslator());
 		TRANSLATORS.put(GroupByKey.SortValuesByTimestamp.class, new SortValuesByTimestampTranslator());
 
+		TRANSLATORS.put(Combine.PerKey.class, new CombinePerKeyTranslator());
+		TRANSLATORS.put(Combine.GroupedValues.class, new CombineGroupedValuesTranslator());
+
 		//TRANSLATORS.put(BigQueryIO.Read.Bound.class, null);
 		//TRANSLATORS.put(BigQueryIO.Write.Bound.class, null);
 
@@ -107,6 +117,49 @@ public class FlinkStreamingTransformTranslators {
 
 	public static FlinkStreamingPipelineTranslator.TransformTranslator<?> getTranslator(PTransform<?, ?> transform) {
 		return TRANSLATORS.get(transform.getClass());
+	}
+
+	private static WindowedDataStream applyWindow(DataStream inputDataStream){
+		WindowedDataStream outputDataStream;
+
+		if (windowFn instanceof FixedWindows) {
+//			reflection troubles for final value
+//			Duration size;
+//			try {
+//			Field field = windowFn.getClass().getDeclaredField("size");
+//			field.setAccessible(true);
+//			Class<?> targetType = field.getType();
+//			Object objectValue = targetType.getConstructor(long.class)
+//					.newInstance(0L);
+//			size = (Duration) field.get(objectValue);
+//			} catch (Exception e) {
+//				throw  new RuntimeException(e);
+//			}
+//			outputDataStream = inputDataStream.window(Time.of(size.getMillis(), TimeUnit.MILLISECONDS));
+			outputDataStream = inputDataStream.window(Time.of(1, TimeUnit.SECONDS));
+		} else if (windowFn instanceof SlidingWindows) {
+//			Duration size;
+//			Duration period;
+//			try {
+//				Field field = windowFn.getClass().getDeclaredField("size");
+//				field.setAccessible(true);
+//				Class<?> targetType = field.getType();
+//				Object objectValue = targetType.getConstructor(Long.class).newInstance(0L);
+//				size = (Duration) field.get(objectValue);
+//
+//				field = windowFn.getClass().getDeclaredField("period");
+//				field.setAccessible(true);
+//				period = (Duration) field.get(objectValue);
+//
+//			} catch (Exception e) {
+//				throw  new RuntimeException(e);
+//			}
+//			outputDataStream = inputDataStream.window(Time.of(size.getMillis(), TimeUnit.MILLISECONDS)).every(Time.of(period.getMillis(), TimeUnit.MILLISECONDS));
+			outputDataStream = inputDataStream.window(Time.of(1, TimeUnit.SECONDS));
+		} else {
+			throw new UnsupportedOperationException("Currently only Fixed and Sliding windows are supported.");
+		}
+		return outputDataStream;
 	}
 
 //	private static class ReadSourceTranslator<T> implements FlinkStreamingPipelineTranslator.TransformTranslator<ReadSource.Bound<T>> {
@@ -215,6 +268,7 @@ public class FlinkStreamingTransformTranslators {
 			hasUnAppliedWindow = true;
 			windowFn = transform.getWindowFn();
 
+
 			// TODO: Add windowing at the beginning of group by key and combine by key
 //			DataStream<T> inputDataStream = context.getInputDataStream(transform.getInput());
 //			DataStream<T> outputDataStream = inputDataStream.window(Time.of(1, TimeUnit.SECONDS)).flatten();
@@ -233,7 +287,7 @@ public class FlinkStreamingTransformTranslators {
 				throw new UnsupportedOperationException("Cannot group unbound data flows.");
 			} else {
 				// TODO: properly get window function
-				DataStream outputDataStream = inputDataStream.window(Time.of(1, TimeUnit.SECONDS)).groupBy(new KeySelector<KV<K,V>, K>() {
+				DataStream outputDataStream = applyWindow(inputDataStream).groupBy(new KeySelector<KV<K, V>, K>() {
 					@Override
 					public K getKey(KV<K, V> kv) throws Exception {
 						return kv.getKey();
@@ -270,6 +324,33 @@ public class FlinkStreamingTransformTranslators {
 						.flatten();
 				context.setOutputDataStream(transform.getOutput(), outputDataStream);
 			}
+		}
+	}
+
+	private static class CombineGroupedValuesTranslator<K, VI, VA, VO> implements FlinkStreamingPipelineTranslator.TransformTranslator<Combine.GroupedValues<K, VI, VO>>{
+
+		@Override
+		public void translateNode(Combine.GroupedValues<K, VI, VO> transform, StreamingTranslationContext context) {
+			//TODO: get types properly
+			DataStream<KV<K, ? extends Iterable<VI>>> inputDataStream = context.getInputDataStream(transform.getInput());
+
+			// TODO: deal with windowing
+			@SuppressWarnings("unchecked")
+			Combine.KeyedCombineFn<? super K, ? super VI, VA, VO> keyedCombineFn = (Combine.KeyedCombineFn<? super K, ? super VI, VA, VO>) transform.getFn();
+
+			FlinkPartialWindowIteratorReduceFunction<K, VI, VA> partialReduceFunction = new FlinkPartialWindowIteratorReduceFunction<>(keyedCombineFn);
+			FlinkWindowReduceFunction<K, VA, VO> reduceFunction = new FlinkWindowReduceFunction<>(keyedCombineFn);
+
+			DataStream outputDataStream = inputDataStream.window(Time.of(1, TimeUnit.SECONDS))
+					// Partially reduce to the intermediate format VA
+					.mapWindow(partialReduceFunction)
+					// Fully reduce the values and create output format VO
+					// TODO: add a groupby here
+//					.groupBy(new KVKeySelector<K, VA>())
+					.mapWindow(reduceFunction)
+					.flatten();
+
+			context.setOutputDataStream(transform.getOutput(), outputDataStream);
 		}
 	}
 
@@ -341,6 +422,13 @@ public class FlinkStreamingTransformTranslators {
 	// --------------------------------------------------------------------------------------------
 	//  Miscellaneous
 	// --------------------------------------------------------------------------------------------
+
+	public static class KVKeySelector<K, VA> implements KeySelector<KV<K, VA>, K>, Serializable {
+		@Override
+		public K getKey(KV<K, VA> kv) throws Exception {
+			return kv.getKey();
+		}
+	}
 
 	private FlinkStreamingTransformTranslators() {}
 }

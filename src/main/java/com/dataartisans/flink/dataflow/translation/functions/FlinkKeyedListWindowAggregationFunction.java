@@ -37,7 +37,7 @@ public class FlinkKeyedListWindowAggregationFunction<K,V> implements WindowMapFu
 		out.collect(KV.of(first.getKey(), passThrough));
 	}
 
-	private static class PassThroughIterable<K, V> implements Iterable<V>, Iterator<V>  {
+	private class PassThroughIterable<K, V> implements Iterable<V>, Iterator<V>  {
 		private KV<K, V> first;
 		private Iterator<KV<K, V>> iterator;
 

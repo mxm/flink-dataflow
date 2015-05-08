@@ -41,12 +41,14 @@ import com.google.cloud.dataflow.sdk.transforms.windowing.WindowFn;
 import com.google.cloud.dataflow.sdk.util.WindowedValue;
 import com.google.cloud.dataflow.sdk.values.KV;
 import com.google.cloud.dataflow.sdk.values.PCollectionView;
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.api.java.io.TextInputFormat;
+import org.apache.flink.api.java.operators.Keys;
 import org.apache.flink.api.java.operators.MapPartitionOperator;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -59,6 +61,7 @@ import org.apache.flink.streaming.api.operators.StreamFlatMap;
 import org.apache.flink.streaming.api.operators.StreamMap;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.windowing.helper.Time;
+import org.apache.flink.streaming.util.keys.KeySelectorUtil;
 import org.joda.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -163,7 +166,7 @@ public class FlinkStreamingTransformTranslators {
 //				throw  new RuntimeException(e);
 //			}
 //			outputDataStream = inputDataStream.window(Time.of(size.getMillis(), TimeUnit.MILLISECONDS)).every(Time.of(period.getMillis(), TimeUnit.MILLISECONDS));
-			outputDataStream = inputDataStream.window(Time.of(1, TimeUnit.SECONDS));
+			outputDataStream = inputDataStream.window(Time.of(10, TimeUnit.SECONDS));
 		} else {
 			throw new UnsupportedOperationException("Currently only Fixed and Sliding windows are supported.");
 		}
@@ -301,12 +304,16 @@ public class FlinkStreamingTransformTranslators {
 			if (!hasUnAppliedWindow) {
 				throw new UnsupportedOperationException("Cannot group unbound data flows.");
 			} else {
-				TypeInformation<KV<K, Iterable<V>>> typeInformation = context.getTypeInfo(transform.getOutput());
+				TypeInformation<KV<K,V>> inputType = inputDataStream.getType();
+				TypeInformation<KV<K, Iterable<V>>> outputType = context.getTypeInfo(transform.getOutput());
+				ExecutionConfig config = inputDataStream.getExecutionEnvironment().getConfig();
 
-				GroupedDataStream<KV<K, V>> groupedStream = inputDataStream.groupBy(new KVKeySelector<K, V>());
+//				GroupedDataStream<KV<K, V>> groupedStream = inputDataStream.groupBy(new KVKeySelector<K, V>());
+				GroupedDataStream<KV<K, V>> groupedStream = new GroupedDataStream<>(inputDataStream,
+						KeySelectorUtil.getSelectorForKeys(new Keys.ExpressionKeys<>(new String[]{"key"}, inputType), inputType, config));
 				WindowedDataStream<KV<K, V>> windowedStream = applyWindow(groupedStream);
 				DiscretizedStream<KV<K, Iterable<V>>> discretizedStream = windowedStream
-						.mapWindow(new FlinkKeyedListWindowAggregationFunction<K, V>(), typeInformation)
+						.mapWindow(new FlinkKeyedListWindowAggregationFunction<K, V>(), outputType)
 						.name(transform.getName());
 
 				// TODO: Support for passing windowed datastreams
@@ -365,6 +372,8 @@ public class FlinkStreamingTransformTranslators {
 		@Override
 		public void translateNode(Combine.GroupedValues<K, VI, VO> transform, StreamingTranslationContext context) {
 			DataStream<KV<K, ? extends Iterable<VI>>> inputDataStream = context.getInputDataStream(transform.getInput());
+			String partialOperatorName = transform.getName() + "-partial";
+			String totalOperatorName = transform.getName() + "-total";
 
 			@SuppressWarnings("unchecked")
 			Combine.KeyedCombineFn<? super K, ? super VI, VA, VO> keyedCombineFn = (Combine.KeyedCombineFn<? super K, ? super VI, VA, VO>) transform.getFn();

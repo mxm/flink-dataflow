@@ -18,6 +18,8 @@
 package com.dataartisans.flink.dataflow.streaming.translation;
 
 import com.dataartisans.flink.dataflow.io.ConsoleIO;
+import com.dataartisans.flink.dataflow.streaming.functions.FlinkPubSubSinkFunction;
+import com.dataartisans.flink.dataflow.streaming.functions.FlinkPubSubSourceFunction;
 import com.dataartisans.flink.dataflow.translation.TranslationContext;
 import com.dataartisans.flink.dataflow.translation.functions.FlinkFlatMapDoFnFunction;
 import com.dataartisans.flink.dataflow.streaming.functions.FlinkKeyedListWindowAggregationFunction;
@@ -27,6 +29,7 @@ import com.dataartisans.flink.dataflow.streaming.functions.FlinkWindowReduceFunc
 import com.dataartisans.flink.dataflow.translation.types.KvCoderTypeInformation;
 import com.google.cloud.dataflow.sdk.coders.Coder;
 import com.google.cloud.dataflow.sdk.coders.KvCoder;
+import com.google.cloud.dataflow.sdk.io.PubsubIO;
 import com.google.cloud.dataflow.sdk.io.TextIO;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
 import com.google.cloud.dataflow.sdk.transforms.DoFn;
@@ -52,10 +55,12 @@ import org.apache.flink.api.java.operators.Keys;
 import org.apache.flink.api.java.operators.MapPartitionOperator;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.DiscretizedStream;
 import org.apache.flink.streaming.api.datastream.GroupedDataStream;
 import org.apache.flink.streaming.api.datastream.WindowedDataStream;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.source.FileSourceFunction;
 import org.apache.flink.streaming.api.operators.StreamFlatMap;
 import org.apache.flink.streaming.api.operators.StreamMap;
@@ -113,7 +118,7 @@ public class FlinkStreamingTransformTranslators {
 
 		//TRANSLATORS.put(DatastoreIO.Sink.class, null);
 
-		//TRANSLATORS.put(PubsubIO.Read.Bound.class, null);
+		TRANSLATORS.put(PubsubIO.Read.Bound.class, null);
 		//TRANSLATORS.put(PubsubIO.Write.Bound.class, null);
 
 //		TRANSLATORS.put(ReadSource.Bound.class, new ReadSourceTranslator());
@@ -190,6 +195,36 @@ public class FlinkStreamingTransformTranslators {
 //		}
 //	}
 
+	// TODO: try out
+	private static class PubSubIOReadTranslator implements FlinkStreamingPipelineTranslator.TransformTranslator<PubsubIO.Read.Bound>{
+
+		@Override
+		public void translateNode(PubsubIO.Read.Bound transform, StreamingTranslationContext context) {
+			String topic = transform.getTopic();
+			String name = transform.getName();
+
+			TypeInformation<String> typeInformation = context.getTypeInfo(transform.getOutput());
+
+			DataStreamSource<String> source = new DataStreamSource<>(context.getExecutionEnvironment(), "source",
+					typeInformation, new StreamSource<>(new FlinkPubSubSourceFunction(topic)), true, name);
+
+			context.setOutputDataStream(transform.getOutput(), source);
+		}
+	}
+
+	// TODO: try out, consider generics
+	private static class PubSubIOWriteTranslator implements FlinkStreamingPipelineTranslator.TransformTranslator<PubsubIO.Write.Bound>{
+
+		@Override
+		public void translateNode(PubsubIO.Write.Bound transform, StreamingTranslationContext context) {
+			String topic = transform.getTopic();
+			String name = transform.getName();
+
+			DataStream<String> inputDataStream = context.getInputDataStream(transform.getInput());
+
+			DataStream<String> dataSink = inputDataStream.addSink(new FlinkPubSubSinkFunction(topic)).name(name);
+		}
+	}
 
 	private static class TextIOReadTranslator implements FlinkStreamingPipelineTranslator.TransformTranslator<TextIO.Read.Bound<String>> {
 		private static final Logger LOG = LoggerFactory.getLogger(TextIOReadTranslator.class);
@@ -226,6 +261,7 @@ public class FlinkStreamingTransformTranslators {
 		@Override
 		public void translateNode(TextIO.Write.Bound<T> transform, StreamingTranslationContext context) {
 			DataStream<T> inputDataStream = context.getInputDataStream(transform.getInput());
+			String name = transform.getName();
 			String filenamePrefix = transform.getFilenamePrefix();
 			String filenameSuffix = transform.getFilenameSuffix();
 			boolean needsValidation = transform.needsValidation();
@@ -238,11 +274,12 @@ public class FlinkStreamingTransformTranslators {
 			LOG.warn("Translation of TextIO.Write.shardNameTemplate not yet supported. Is: {}.", shardNameTemplate);
 
 			inputDataStream.print();
-//			DataSink<T> dataSink = inputDataStream.writeAsText(filenamePrefix);
-//
-//			if (numShards > 0) {
-//				dataSink.setParallelism(numShards);
-//			}
+			DataStreamSink<T> dataSink = inputDataStream.writeAsText(filenamePrefix);
+			dataSink.name(name);
+
+			if (numShards > 0) {
+				dataSink.setParallelism(numShards);
+			}
 		}
 	}
 

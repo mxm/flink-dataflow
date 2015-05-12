@@ -30,18 +30,20 @@ import java.util.Iterator;
  * {@link com.google.cloud.dataflow.sdk.values.KV} elements VI, extracts the key and emits accumulated
  * values which have the intermediate format VA.
  */
-public class FlinkPartialWindowIteratorReduceFunction<K, VI, VA> implements WindowMapFunction<KV<K, ? extends Iterable<VI>>, KV<K, VA>> {
+public class FlinkPartialWindowIteratorReduceFunction<K, VI, VA> implements WindowMapFunction<KV<K, Iterable<VI>>, KV<K, VA>> {
 
+//	private final Combine.KeyedCombineFn<? extends K, ? extends VI, VA, ?> keyedCombineFn;
 	private final Combine.KeyedCombineFn<? super K, ? super VI, VA, ?> keyedCombineFn;
 
 	public FlinkPartialWindowIteratorReduceFunction(Combine.KeyedCombineFn<? super K, ? super VI, VA, ?>
+//	public FlinkPartialWindowIteratorReduceFunction(Combine.KeyedCombineFn<? extends K, ? extends VI, VA, ?>
 															keyedCombineFn) {
 		this.keyedCombineFn = keyedCombineFn;
 	}
 
 	@Override
-	public void mapWindow(Iterable<KV<K, ? extends Iterable<VI>>> elements, Collector<KV<K, VA>> out) throws Exception {
-		final Iterator<? extends KV<K, ? extends Iterable<VI>>> elementsItarator = elements.iterator();
+	public void mapWindow(Iterable<KV<K, Iterable<VI>>> elements, Collector<KV<K, VA>> out) throws Exception {
+		final Iterator<KV<K, Iterable<VI>>> elementsItarator = elements.iterator();
 		// create accumulator using the first elements key
 		KV<K, ? extends Iterable<VI>> first = elementsItarator.next();
 		K key = first.getKey();

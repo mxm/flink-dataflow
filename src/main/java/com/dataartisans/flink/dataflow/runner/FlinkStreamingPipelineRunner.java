@@ -22,22 +22,18 @@ import com.google.cloud.dataflow.sdk.transforms.PTransform;
 import com.google.cloud.dataflow.sdk.values.PInput;
 import com.google.cloud.dataflow.sdk.values.POutput;
 import org.apache.flink.api.common.JobExecutionResult;
+import org.apache.flink.streaming.api.environment.LocalStreamEnvironment;
+import org.apache.flink.streaming.api.environment.RemoteStreamEnvironment;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A {@link com.google.cloud.dataflow.sdk.runners.PipelineRunner} that executes the operations in the
- * pipeline by first translating them to a Flink Plan and then executing them either locally
- * or on a Flink cluster, depending on the configuration.
+ * Implementation of the {@link FlinkPipelineRunner} for streaming Flink jobs typically
+ * implementing unbounded dataflows.
  *
  * This is based on {@link com.google.cloud.dataflow.sdk.runners.DataflowPipelineRunner}.
  */
@@ -46,11 +42,9 @@ public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 	private static final Logger LOG = LoggerFactory.getLogger(FlinkStreamingPipelineRunner.class);
 
 	/**
-	 * The Flink execution environment. This is instantiated to either a
-	 * {@link org.apache.flink.api.java.CollectionEnvironment},
-	 * a {@link org.apache.flink.api.java.LocalEnvironment} or
-	 * a {@link org.apache.flink.api.java.RemoteEnvironment}, depending on the configuration
-	 * options.
+	 * The Flink streaming execution environment. This is instantiated to either a
+	 * a {@link RemoteStreamEnvironment} or a {@link LocalStreamEnvironment} depending
+	 * on the configuration options.
 	 */
 	private final StreamExecutionEnvironment flinkEnv;
 
@@ -62,15 +56,11 @@ public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 		super(options);
 
 		this.flinkEnv = createExecutionEnvironment(options);
-		//for testing purposes
-//		flinkEnv.getStreamGraph().setChaining(false); // does not help
-//		flinkEnv.setParallelism(1);
-
 		this.translator = new FlinkStreamingPipelineTranslator(flinkEnv, options);
 	}
 
 	/**
-	 * Create Flink {@link org.apache.flink.api.java.ExecutionEnvironment} depending
+	 * Create Flink {@link StreamExecutionEnvironment} depending
 	 * on the options.
 	 */
 	private StreamExecutionEnvironment createExecutionEnvironment(FlinkPipelineOptions options) {
@@ -111,7 +101,7 @@ public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 
 	@Override
 	public FlinkRunnerResult run(Pipeline pipeline) {
-		LOG.info("Executing pipeline using FlinkPipelineRunner.");
+		LOG.info("Executing pipeline using FlinkStreamingPipelineRunner.");
 		
 		LOG.info("Translating pipeline to Flink program.");
 		
@@ -129,7 +119,8 @@ public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 		}
 		
 		LOG.info("Execution finished in {} msecs", result.getNetRuntime());
-		
+
+		//These should be currently empty for Flink Streaming jobs
 		Map<String, Object> accumulators = result.getAllAccumulatorResults();
 		if (accumulators != null && !accumulators.isEmpty()) {
 			LOG.info("Final aggregator values:");
@@ -150,7 +141,7 @@ public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 	public static FlinkStreamingPipelineRunner createForTest() {
 		FlinkPipelineOptions options = PipelineOptionsFactory.as(FlinkPipelineOptions.class);
 		// we use [auto] for testing since this will make it pick up the Testing
-		// ExecutionEnvironment
+		// StreamExecutionEnvironment
 		options.setFlinkMaster("[auto]");
 		return new FlinkStreamingPipelineRunner(options);
 	}
@@ -159,40 +150,5 @@ public class FlinkStreamingPipelineRunner extends FlinkPipelineRunner {
 	public <Output extends POutput, Input extends PInput> Output apply(
 			PTransform<Input, Output> transform, Input input) {
 		return super.apply(transform, input);
-	}
-
-	/////////////////////////////////////////////////////////////////////////////
-
-	@Override
-	public String toString() { return "DataflowPipelineRunner#" + hashCode(); }
-
-	/**
-	 * Attempts to detect all the resources the class loader has access to. This does not recurse
-	 * to class loader parents stopping it from pulling in resources from the system class loader.
-	 *
-	 * @param classLoader The URLClassLoader to use to detect resources to stage.
-	 * @throws IllegalArgumentException  If either the class loader is not a URLClassLoader or one
-	 * of the resources the class loader exposes is not a file resource.
-	 * @return A list of absolute paths to the resources the class loader uses.
-	 */
-	protected static List<String> detectClassPathResourcesToStage(ClassLoader classLoader) {
-		if (!(classLoader instanceof URLClassLoader)) {
-			String message = String.format("Unable to use ClassLoader to detect classpath elements. "
-					+ "Current ClassLoader is %s, only URLClassLoaders are supported.", classLoader);
-			LOG.error(message);
-			throw new IllegalArgumentException(message);
-		}
-
-		List<String> files = new ArrayList<>();
-		for (URL url : ((URLClassLoader) classLoader).getURLs()) {
-			try {
-				files.add(new File(url.toURI()).getAbsolutePath());
-			} catch (IllegalArgumentException | URISyntaxException e) {
-				String message = String.format("Unable to convert url (%s) to file.", url);
-				LOG.error(message);
-				throw new IllegalArgumentException(message, e);
-			}
-		}
-		return files;
 	}
 }

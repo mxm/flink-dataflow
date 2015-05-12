@@ -26,9 +26,11 @@ import com.dataartisans.flink.dataflow.streaming.functions.FlinkKeyedListWindowA
 import com.dataartisans.flink.dataflow.streaming.functions.FlinkPartialWindowIteratorReduceFunction;
 import com.dataartisans.flink.dataflow.streaming.functions.FlinkPartialWindowReduceFunction;
 import com.dataartisans.flink.dataflow.streaming.functions.FlinkWindowReduceFunction;
+import com.dataartisans.flink.dataflow.translation.types.CoderTypeInformation;
 import com.dataartisans.flink.dataflow.translation.types.KvCoderTypeInformation;
 import com.google.cloud.dataflow.sdk.coders.Coder;
 import com.google.cloud.dataflow.sdk.coders.KvCoder;
+import com.google.cloud.dataflow.sdk.coders.StandardCoder;
 import com.google.cloud.dataflow.sdk.io.PubsubIO;
 import com.google.cloud.dataflow.sdk.io.TextIO;
 import com.google.cloud.dataflow.sdk.transforms.Combine;
@@ -273,7 +275,7 @@ public class FlinkStreamingTransformTranslators {
 			LOG.warn("Translation of TextIO.Write.filenameSuffix not yet supported. Is: {}.", filenameSuffix);
 			LOG.warn("Translation of TextIO.Write.shardNameTemplate not yet supported. Is: {}.", shardNameTemplate);
 
-			inputDataStream.print();
+//			inputDataStream.print();
 			DataStreamSink<T> dataSink = inputDataStream.writeAsText(filenamePrefix);
 			dataSink.name(name);
 
@@ -341,7 +343,8 @@ public class FlinkStreamingTransformTranslators {
 			if (!hasUnAppliedWindow) {
 				throw new UnsupportedOperationException("Cannot group unbound data flows.");
 			} else {
-				TypeInformation<KV<K,V>> inputType = inputDataStream.getType();
+				KvCoder<K, V> inputCoder = (KvCoder<K, V>) transform.getInput().getCoder();
+				TypeInformation<KV<K,V>> inputType = new KvCoderTypeInformation<>(inputCoder);
 				TypeInformation<KV<K, Iterable<V>>> outputType = context.getTypeInfo(transform.getOutput());
 				ExecutionConfig config = inputDataStream.getExecutionEnvironment().getConfig();
 
@@ -376,9 +379,10 @@ public class FlinkStreamingTransformTranslators {
 					keyedCombineFn.getAccumulatorCoder(transform.getPipeline().getCoderRegistry(), inputCoder.getKeyCoder(), inputCoder.getValueCoder());
 
 			// TODO: use this type information for grouping
-			TypeInformation<KV<K, VI>> kvCoderTypeInformation = new KvCoderTypeInformation<>(inputCoder);
+			TypeInformation<KV<K, VI>> inputType = new KvCoderTypeInformation<>(inputCoder);
 			TypeInformation<KV<K, VA>> partialReduceTypeInfo = new KvCoderTypeInformation<>(KvCoder.of(inputCoder.getKeyCoder(), accumulatorCoder));
 			TypeInformation<KV<K, VO>> reduceTypeInfo = context.getTypeInfo(transform.getOutput());
+			ExecutionConfig config = inputDataStream.getExecutionEnvironment().getConfig();
 
 			// TODO: change to unclosed window
 			if (!hasUnAppliedWindow){
@@ -388,7 +392,8 @@ public class FlinkStreamingTransformTranslators {
 				FlinkWindowReduceFunction<K, VA, VO> reduceFunction = new FlinkWindowReduceFunction<>(keyedCombineFn);
 
 				//Construct required windows
-				GroupedDataStream<KV<K, VI>> groupedStream = inputDataStream.groupBy(new KVKeySelector<K, VI>());
+				GroupedDataStream<KV<K, VI>> groupedStream = new GroupedDataStream<>(inputDataStream,
+						KeySelectorUtil.getSelectorForKeys(new Keys.ExpressionKeys<>(new String[]{"key"}, inputType), inputType, config));
 				WindowedDataStream<KV<K,VI>> windowedStream = applyWindow(groupedStream);
 
 				//Partially reduce to the intermediate format
@@ -408,27 +413,48 @@ public class FlinkStreamingTransformTranslators {
 
 		@Override
 		public void translateNode(Combine.GroupedValues<K, VI, VO> transform, StreamingTranslationContext context) {
-			DataStream<KV<K, ? extends Iterable<VI>>> inputDataStream = context.getInputDataStream(transform.getInput());
+			DataStream<? extends KV<K, ? extends Iterable<VI>>> inputDataStream = context.getInputDataStream(transform.getInput());
 			String partialOperatorName = transform.getName() + "-partial";
 			String totalOperatorName = transform.getName() + "-total";
 
 			@SuppressWarnings("unchecked")
 			Combine.KeyedCombineFn<? super K, ? super VI, VA, VO> keyedCombineFn = (Combine.KeyedCombineFn<? super K, ? super VI, VA, VO>) transform.getFn();
 
+			Coder<? extends KV<K, ? extends Iterable<VI>>> inputCoder = transform.getInput().getCoder();
+			if (!(inputCoder instanceof KvCoder)) {
+				throw new IllegalStateException(
+						"Combine.GroupedValues requires its input to use KvCoder");
+			}
+			@SuppressWarnings({"unchecked", "rawtypes"})
+			KvCoder<K, ? extends Iterable<VI>> kvCoder = (KvCoder) inputCoder;
+			ExecutionConfig config = inputDataStream.getExecutionEnvironment().getConfig();
+
+			TypeInformation<? extends KV<K, ? extends Iterable<VI>>> inputType = new CoderTypeInformation<>(inputCoder);
+
+//			// TODO: use this type information for grouping
+			TypeInformation<KV<K,VA>> partialReduceTypeInfo = new KvCoderTypeInformation<>(KvCoder.of(((KvCoder) inputCoder).getKeyCoder()
+					, transform.getAccumulatorCoder()));
+			TypeInformation<KV<K, VO>> reduceTypeInfo = context.getTypeInfo(transform.getOutput());
+
 			FlinkPartialWindowIteratorReduceFunction<K, VI, VA> partialReduceFunction = new FlinkPartialWindowIteratorReduceFunction<>(keyedCombineFn);
 			FlinkWindowReduceFunction<K, VA, VO> reduceFunction = new FlinkWindowReduceFunction<>(keyedCombineFn);
 
-			DataStream outputDataStream = inputDataStream
-					.groupBy(new KVKeySelector())
-					.window(Time.of(1, TimeUnit.SECONDS))
-					// Partially reduce to the intermediate format VA
-					.mapWindow(partialReduceFunction)
-					// Fully reduce the values and create output format VO
-					// TODO: add a groupby here
-					.mapWindow(reduceFunction)
-					.flatten();
+			//Construct required windows
+			// TODO: Set this properly, problem is (? extends K) != (? extends K)
+//			GroupedDataStream<KV<K, Iterable<VI>>> groupedStream = new GroupedDataStream<>(inputDataStream,
+//					KeySelectorUtil.getSelectorForKeys(new Keys.ExpressionKeys<>(new String[]{"key"}, inputType), inputType, config));
+			GroupedDataStream<KV<K, Iterable<VI>>> groupedStream = inputDataStream.groupBy(new KVKeySelector());
+			WindowedDataStream<KV<K,Iterable<VI>>> windowedStream = applyWindow(groupedStream);
 
-			context.setOutputDataStream(transform.getOutput(), outputDataStream);
+			//Partially reduce to the intermediate format
+			DiscretizedStream<KV<K, VA>> intermediateStream = windowedStream.mapWindow(partialReduceFunction, partialReduceTypeInfo)
+					.name(partialOperatorName);
+
+			//Reduce fully to output format VO
+			DiscretizedStream<KV<K,VO>> outputStream = intermediateStream.mapWindow(reduceFunction, reduceTypeInfo)
+					.name(totalOperatorName);
+
+			context.setOutputDataStream(transform.getOutput(), outputStream.flatten());
 		}
 	}
 

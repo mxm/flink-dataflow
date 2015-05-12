@@ -34,7 +34,9 @@ import java.util.List;
 /**
  * A {@link PipelineRunner} that executes the operations in the
  * pipeline by first translating them to a Flink Plan and then executing them either locally
- * or on a Flink cluster, depending on the configuration.
+ * or on a Flink cluster, depending on the configuration. The Runner has two diferrent code
+ * paths for batch and streaming jobs, encapsulated in the {@link FlinkBatchPipelineRunner}
+ * and {@link FlinkStreamingPipelineRunner} respectively.
  *
  * This is based on {@link com.google.cloud.dataflow.sdk.runners.DataflowPipelineRunner}.
  */
@@ -110,7 +112,20 @@ public abstract class FlinkPipelineRunner extends PipelineRunner<FlinkRunnerResu
 		return options;
 	}
 
+	/////////////////////////////////////////////////////////////////////////////
 
+	@Override
+	public String toString() { return "DataflowPipelineRunner#" + hashCode(); }
+
+	/**
+	 * Attempts to detect all the resources the class loader has access to. This does not recurse
+	 * to class loader parents stopping it from pulling in resources from the system class loader.
+	 *
+	 * @param classLoader The URLClassLoader to use to detect resources to stage.
+	 * @throws IllegalArgumentException  If either the class loader is not a URLClassLoader or one
+	 * of the resources the class loader exposes is not a file resource.
+	 * @return A list of absolute paths to the resources the class loader uses.
+	 */
 	protected static List<String> detectClassPathResourcesToStage(ClassLoader classLoader) {
 		if (!(classLoader instanceof URLClassLoader)) {
 			String message = String.format("Unable to use ClassLoader to detect classpath elements. "

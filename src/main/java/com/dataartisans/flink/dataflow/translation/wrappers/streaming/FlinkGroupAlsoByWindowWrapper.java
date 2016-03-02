@@ -307,7 +307,6 @@ public class FlinkGroupAlsoByWindowWrapper<K, VIN, VACC, VOUT>
 
 	@Override
 	public void close() throws Exception {
-		processWatermark(new Watermark(BoundedWindow.TIMESTAMP_MAX_VALUE.getMillis()));
 		super.close();
 	}
 

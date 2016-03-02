@@ -520,6 +520,7 @@ public class FlinkGroupAlsoByWindowWrapper<K, VIN, VACC, VOUT>
 					// collector.setAbsoluteTimestamp(timestamp.getMillis());
 					collector.setAbsoluteTimestamp(0);
 					collector.collect(WindowedValue.of(output, timestamp, windows, pane));
+
 				}
 
 				@Override

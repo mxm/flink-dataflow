@@ -236,8 +236,14 @@ public class FlinkPipelineExecutionEnvironment {
 
 		// for the following 2 parameters, a value of -1 means that Flink will use
 		// the default values as specified in the configuration.
-		this.flinkStreamEnv.setNumberOfExecutionRetries(options.getNumberOfExecutionRetries());
-		this.flinkStreamEnv.getConfig().setExecutionRetryDelay(options.getExecutionRetryDelay());
+		int numRetries = options.getNumberOfExecutionRetries();
+		if (numRetries != -1) {
+			this.flinkStreamEnv.setNumberOfExecutionRetries(numRetries);
+		}
+		long retryDelay = options.getExecutionRetryDelay();
+		if (retryDelay != -1) {
+			this.flinkStreamEnv.getConfig().setExecutionRetryDelay(retryDelay);
+		}
 
 		// A value of -1 corresponds to disabled checkpointing (see CheckpointConfig in Flink).
 		// If the value is not -1, then the validity checks are applied.

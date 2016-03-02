@@ -515,8 +515,7 @@ public class FlinkGroupAlsoByWindowWrapper<K, VIN, VACC, VOUT>
 				@Override
 				public void outputWindowedValue(KV<K, VOUT> output, Instant timestamp, Collection<? extends BoundedWindow> windows, PaneInfo pane) {
 					// TODO: No need to represent timestamp twice.
-					// collector.setAbsoluteTimestamp(timestamp.getMillis());
-					collector.setAbsoluteTimestamp(0);
+					collector.setAbsoluteTimestamp(timestamp.getMillis());
 					collector.collect(WindowedValue.of(output, timestamp, windows, pane));
 
 				}

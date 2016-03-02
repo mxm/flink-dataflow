@@ -231,9 +231,7 @@ public class FlinkPipelineExecutionEnvironment {
 		// set parallelism in the options (required by some execution code)
 		options.setParallelism(flinkStreamEnv.getParallelism());
 
-		// although we do not use the generated timestamps,
-		// enabling timestamps is needed for the watermarks.
-		// this.flinkStreamEnv.getConfig().enableTimestamps();
+		// default to event time
 		this.flinkStreamEnv.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
 		// for the following 2 parameters, a value of -1 means that Flink will use

@@ -43,10 +43,8 @@ import org.apache.flink.streaming.api.operators.*;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTaskState;
-import org.apache.flink.util.Collector;
 import org.joda.time.Instant;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.*;
 
